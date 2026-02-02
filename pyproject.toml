@@ -1,0 +1,16 @@
+[project]
+name = "small-lm-demo"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "tiktoken>=0.12.0",
+    "torch>=2.10.0",
+]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.format]
+indent-style = "tab"
