@@ -9,9 +9,9 @@ import torch.nn.functional as F
 
 @dataclass
 class GPTConfig:
-	block_size: int = 1024  # 单个序列的最大长度
-	batch_size: int = 12  # 每次训练的序列数量
-	n_layer: int = 12  # Transformer块的数量
+	block_size: int = 512  # 单个序列的最大长度
+	batch_size: int = 4  # 每次训练的序列数量
+	n_layer: int = 2  # Transformer块的数量
 	n_head: int = 12  # 注意力头的数量
 	n_embd: int = 768  # 嵌入向量的维度
 	hidden_dim: int = n_embd
@@ -106,7 +106,7 @@ class SmallLanguageModel(nn.Module):
 		super().__init__()
 
 		# 当前 LLM 升级点：
-		# 1. postion embedding 改为 rope
+		# 1. postion embedding 改为 RoPE (Rotary Positional Embeddings)
 		# 2. norm -> rmsnorm
 		# 3. mlp -> swiglu
 		# 4. mha -> gqa

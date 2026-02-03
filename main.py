@@ -1,3 +1,4 @@
+import tiktoken
 import torch
 from torch.utils.data import DataLoader
 
@@ -5,14 +6,14 @@ from dataset import MyDataset
 from slm import GPTConfig, SmallLanguageModel
 
 
-def train(model, optimizer, scheduler, train_loader):
+def train(model, optimizer, scheduler, train_loader, device):
 	model.train()
 	total_loss = 0.0
 
 	for batch_idx, (input_ids, target_ids) in enumerate(train_loader):
 		# 将数据移动到设备上
-		input_ids = input_ids.to(model.device)
-		target_ids = target_ids.to(model.device)
+		input_ids = input_ids.to(device)
+		target_ids = target_ids.to(device)
 
 		# 前向传播
 		logits, loss = model(input_ids, targets=target_ids)
@@ -30,15 +31,15 @@ def train(model, optimizer, scheduler, train_loader):
 		return total_loss / len(train_loader)
 
 
-def eval(model, eval_loader):
+def eval(model, eval_loader, device):
 	model.eval()  # 去除 dropout 等
 	total_loss = 0.0
 
 	with torch.no_grad():
 		for input_ids, target_ids in eval_loader:
 			# 将数据移动到设备上
-			input_ids = input_ids.to(model.device)
-			target_ids = target_ids.to(model.device)
+			input_ids = input_ids.to(device)
+			target_ids = target_ids.to(device)
 
 			# 前向传播
 			_, loss = model(input_ids, targets=target_ids)
@@ -50,7 +51,8 @@ if __name__ == "__main__":
 	config = GPTConfig()
 
 	model = SmallLanguageModel(config)
-	model = model.to("cuda" if torch.cuda.is_available() else "cpu")
+	device = "cuda" if torch.cuda.is_available() else "cpu"
+	model = model.to(device)
 	print(f"Total parameters: {sum(p.numel() for p in model.parameters()) / 1e6} M")
 
 	optimizer = torch.optim.AdamW(model.parameters(), lr=1e-4)
@@ -62,9 +64,10 @@ if __name__ == "__main__":
 	train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
 	eval_loader = DataLoader(eval_dataset, batch_size=32, shuffle=False)
 
+	enc = tiktoken.get_encoding("gpt2")
 	for epoch in range(10):
-		train_loss = train(model, optimizer, scheduler, train_loader)
-		eval_loss = eval(model, eval_loader)
+		train_loss = train(model, optimizer, scheduler, train_loader, device)
+		eval_loss = eval(model, eval_loader, device)
 		print(f"Epoch [{epoch + 1}/10], Train Loss: {train_loss:.4f}, Eval Loss: {eval_loss:.4f}")
 
 		# 保存模型检查点
@@ -76,3 +79,10 @@ if __name__ == "__main__":
 			"eval_loss": eval_loss,
 		}
 		torch.save(checkpoint, f"model_epoch_{epoch + 1}.pt")
+
+		# 示例生成
+		input = enc.encode("今天天气如何？")
+		input = torch.tensor(input, dtype=torch.long).unsqueeze(0)
+		output = model.generate(input, 512)
+		output = enc.decode(output[0].tolist())
+		print(f"Generated text: {output}")

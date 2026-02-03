@@ -1,6 +1,7 @@
 import json
 
 import tiktoken
+import torch
 from torch.utils.data import Dataset
 
 
@@ -14,14 +15,22 @@ class MyDataset(Dataset):
 
 		encoded_lines = []
 		with open(data_path, "r", encoding="utf-8") as f:
+			i = 0
 			for line in f:
 				line = line.strip()
 				if not line:
 					continue
-				text = json.loads(line)["text"]  # 默认每一行是一个 JSON 对象，提取 "text" 字段
+				js = json.loads(line)  # 默认每一行是一个 JSON 对象
+				question = js.get("question", "")
+				answer = js.get("answer", "")
+				text = question + answer
+
 				# 编码文本并添加结束标记
 				encoded_line = self.enc.encode(text) + [self.eos_token]
-				encoded_lines.append(encoded_line)
+				encoded_lines.extend(encoded_line)
+				i += 1
+				if i > 1000:  # 仅读取前 1000 条
+					break
 
 		# 进行 chunk 划分
 		self.encoded_data = []
@@ -36,6 +45,6 @@ class MyDataset(Dataset):
 
 	def __getitem__(self, idx):
 		chunk = self.encoded_data[idx]
-		input_ids = chunk[:-1]  # 输入部分
-		target_ids = chunk[1:]  # 目标部分，向右移动一位
+		input_ids = torch.tensor(chunk[:-1], dtype=torch.long)  # 输入部分
+		target_ids = torch.tensor(chunk[1:], dtype=torch.long)  # 目标部分，向右移动一位
 		return input_ids, target_ids
