@@ -71,6 +71,45 @@ class MultiHeadAttention(nn.Module):
 		return output
 
 
+class MatrixRotationMultiHeadAttention(nn.Module):
+	def __init__(self, config: GPTConfig) -> None:
+		super().__init__()
+
+		self.hidden_dim = config.hidden_dim
+		self.head_size = config.head_size
+		self.head_dim = self.hidden_dim // self.head_size
+
+		self.q_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
+		self.k_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
+		self.v_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
+		self.out_proj = nn.Linear(self.hidden_dim, self.hidden_dim)
+		self.dropout = nn.Dropout(config.dropout)
+
+	def forward(self, x: torch.Tensor) -> torch.Tensor:
+		batch_size, seq_size, hidden_dim = x.size()
+
+		# (batch_size, seq_size, hidden_dim) -> (batch_size, seq_size, head_size, head_dim) -> (batch_size, head_size, seq_size, head_dim)
+		q = self.q_proj(x).view(batch_size, seq_size, self.head_size, self.head_dim).transpose(1, 2)
+		k = self.k_proj(x).view(batch_size, seq_size, self.head_size, self.head_dim).transpose(1, 2)
+		v = self.v_proj(x).view(batch_size, seq_size, self.head_size, self.head_dim).transpose(1, 2)
+
+		attention_weight = q @ k.transpose(-2, -1) / math.sqrt(self.head_dim)
+		attention_weight = attention_weight.masked_fill(
+			torch.tril(torch.ones(seq_size, seq_size).to(x.device).view(batch_size, self.head_size, seq_size, seq_size))
+			== 0,
+			float("-inf"),
+		)
+		attention_weight = F.softmax(attention_weight, dim=-1)
+		attention_weight = self.dropout(attention_weight)
+
+		output = attention_weight @ v  # shape: (batch_size, head_size, seq_size, head_dim)
+		output = (
+			output.transpose(1, 2).contiguous().view(batch_size, seq_size, hidden_dim)
+		)  # shape: (batch_size, seq_size, hidden_dim)
+		output = self.out_proj(output)
+		return output
+
+
 class FeedForward(nn.Module):
 	def __init__(self, config: GPTConfig) -> None:
 		super().__init__()
